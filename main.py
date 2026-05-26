@@ -56,8 +56,8 @@ def pick_quotes(all_quotes: list, sent_texts: set) -> tuple[str, list]:
     for category in categories:
         pool = [q for q in all_quotes if q["category"] == category]
         available = [q for q in pool if q["text"] not in sent_texts]
-        if len(available) >= 2:
-            chosen = random.sample(available, 2)
+        if len(available) >= 3:
+            chosen = random.sample(available, 3)
             return category, chosen
 
     return None, []
@@ -85,6 +85,10 @@ def send_telegram(chat_id: str, text: str) -> bool:
         return True
     except requests.RequestException as e:
         print(f"  [ERROR] 발송 실패 (chat_id={chat_id}): {e}")
+        try:
+            print(f"  [ERROR] 텔레그램 응답: {e.response.json()}")
+        except Exception:
+            pass
         return False
 
 # ── 메인 ─────────────────────────────────────────────────────────────
@@ -128,7 +132,7 @@ def main():
         "quotes": [q["text"] for q in chosen],
     }
     save_sent(sent)
-    print(f"[완료] [{category}] 명언 2개 → {success}명 발송 성공")
+    print(f"[완료] [{category}] 명언 3개 → {success}명 발송 성공")
 
 if __name__ == "__main__":
     main()
