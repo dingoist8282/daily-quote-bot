@@ -65,10 +65,11 @@ def pick_quotes(all_quotes: list, sent_texts: set) -> tuple[str, list]:
 # ── 텔레그램 발송 ─────────────────────────────────────────────────────
 def format_message(category: str, quotes: list) -> str:
     emoji = CATEGORY_EMOJI.get(category, "💬")
-    lines = [f"{emoji} <b>오늘의 명언 [{category}]</b>\n"]
+    lines = [f"{emoji} 오늘의 명언 [{category}]", ""]
     for i, q in enumerate(quotes, 1):
         lines.append(f"{i}. {q['text']}")
-        lines.append(f"   — {q['author']}\n")
+        lines.append(f"   — {q['author']}")
+        lines.append("")
     lines.append(f"📅 {TODAY}")
     return "\n".join(lines)
 
@@ -77,7 +78,7 @@ def send_telegram(chat_id: str, text: str) -> bool:
     try:
         res = requests.post(
             url,
-            json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
+            json={"chat_id": chat_id, "text": text},
             timeout=10,
         )
         res.raise_for_status()
