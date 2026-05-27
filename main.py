@@ -1,7 +1,7 @@
 """
 오늘의 명언 텔레그램 봇
-- quotes.json에서 랜덤 카테고리 명언 2개 선택 (중복 방지)
-- 텔레그램 발송 (TELEGRAM_CHAT_IDS에 등록된 대상)
+- quotes.json에서 랜덤 카테고리 명언 3개 선택 (중복 방지)
+- 하루 4회 발송: 07시 / 12시 / 18시 / 21시 KST
 """
 
 import requests
@@ -12,8 +12,11 @@ import sys
 from datetime import datetime, timezone, timedelta
 
 # ── 설정 ──────────────────────────────────────────────────────────────
-KST = timezone(timedelta(hours=9))
-TODAY = datetime.now(KST).strftime("%Y-%m-%d")
+KST       = timezone(timedelta(hours=9))
+NOW_KST   = datetime.now(KST)
+TODAY     = NOW_KST.strftime("%Y-%m-%d")
+SLOT      = NOW_KST.strftime("%H")          # 실행 시각 (예: "07", "12", "18", "21")
+TODAY_SLOT = f"{TODAY}_{SLOT}"              # 키: "2026-05-27_07"
 
 QUOTES_FILE = "quotes.json"
 SENT_FILE   = "sent_quotes.json"
@@ -26,6 +29,10 @@ CATEGORY_EMOJI = {
     "도전": "🚀", "자신감": "✨",
 }
 
+SLOT_LABEL = {
+    "07": "🌄 아침", "12": "☀️ 점심", "18": "🌇 저녁", "21": "🌙 밤",
+}
+
 # ── 파일 관리 ─────────────────────────────────────────────────────────
 def load_quotes() -> list:
     with open(QUOTES_FILE, encoding="utf-8") as f:
@@ -34,7 +41,9 @@ def load_quotes() -> list:
 def load_sent() -> dict:
     if os.path.exists(SENT_FILE):
         with open(SENT_FILE, encoding="utf-8") as f:
-            return json.load(f)
+            content = f.read().strip()
+            if content:
+                return json.loads(content)
     return {}
 
 def save_sent(data: dict):
@@ -43,29 +52,28 @@ def save_sent(data: dict):
 
 def all_sent_texts(sent: dict) -> set:
     result = set()
-    for day_data in sent.values():
-        result.update(day_data.get("quotes", []))
+    for slot_data in sent.values():
+        result.update(slot_data.get("quotes", []))
     return result
 
 # ── 명언 선택 ─────────────────────────────────────────────────────────
-def pick_quotes(all_quotes: list, sent_texts: set) -> tuple[str, list]:
-    """랜덤 카테고리에서 미발송 명언 2개 선택 → (카테고리, [명언텍스트, ...])"""
+def pick_quotes(all_quotes: list, sent_texts: set) -> tuple:
     categories = list({q["category"] for q in all_quotes})
     random.shuffle(categories)
 
     for category in categories:
-        pool = [q for q in all_quotes if q["category"] == category]
+        pool      = [q for q in all_quotes if q["category"] == category]
         available = [q for q in pool if q["text"] not in sent_texts]
         if len(available) >= 3:
-            chosen = random.sample(available, 3)
-            return category, chosen
+            return category, random.sample(available, 3)
 
     return None, []
 
 # ── 텔레그램 발송 ─────────────────────────────────────────────────────
 def format_message(category: str, quotes: list) -> str:
-    emoji = CATEGORY_EMOJI.get(category, "💬")
-    lines = [f"{emoji} 오늘의 명언 [{category}]", ""]
+    emoji      = CATEGORY_EMOJI.get(category, "💬")
+    slot_label = SLOT_LABEL.get(SLOT, "")
+    lines = [f"{emoji} {slot_label} 명언 [{category}]", ""]
     for i, q in enumerate(quotes, 1):
         lines.append(f"{i}. {q['text']}")
         lines.append(f"   — {q['author']}")
@@ -93,7 +101,7 @@ def send_telegram(chat_id: str, text: str) -> bool:
 
 # ── 메인 ─────────────────────────────────────────────────────────────
 def main():
-    print(f"[{TODAY}] 명언 봇 시작")
+    print(f"[{TODAY_SLOT}] 명언 봇 시작")
 
     if not BOT_TOKEN:
         print("[ERROR] TELEGRAM_BOT_TOKEN 환경변수가 없습니다.")
@@ -104,18 +112,22 @@ def main():
 
     sent = load_sent()
 
-    if TODAY in sent:
-        print(f"[SKIP] 오늘({TODAY})은 이미 발송 완료되었습니다.")
+    if TODAY_SLOT in sent:
+        print(f"[SKIP] {TODAY_SLOT} 슬롯은 이미 발송 완료되었습니다.")
         return
 
-    all_quotes  = load_quotes()
-    sent_texts  = all_sent_texts(sent)
-    print(f"전체 명언: {len(all_quotes)}개 / 누적 발송: {len(sent_texts)}개 / 남은 명언: {len(all_quotes) - len(sent_texts)}개")
+    all_quotes = load_quotes()
+    sent_texts = all_sent_texts(sent)
+    remaining  = len(all_quotes) - len(sent_texts)
+    print(f"전체: {len(all_quotes)}개 / 발송됨: {len(sent_texts)}개 / 남은 명언: {remaining}개")
+
+    if remaining < 3:
+        print("[WARN] 남은 명언이 부족합니다. quotes.json을 보충해주세요.")
 
     category, chosen = pick_quotes(all_quotes, sent_texts)
 
     if not chosen:
-        print("[ERROR] 발송 가능한 명언이 없습니다. quotes.json을 보충해주세요.")
+        print("[ERROR] 발송 가능한 명언이 없습니다.")
         sys.exit(1)
 
     message = format_message(category, chosen)
@@ -127,7 +139,7 @@ def main():
         print("[ERROR] 모든 발송이 실패했습니다.")
         sys.exit(1)
 
-    sent[TODAY] = {
+    sent[TODAY_SLOT] = {
         "category": category,
         "quotes": [q["text"] for q in chosen],
     }
