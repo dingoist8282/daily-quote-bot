@@ -2,10 +2,7 @@ name: 오늘의 명언 발송
 
 on:
   schedule:
-    - cron: "0 22 * * *"   # 07:00 KST
-    - cron: "0 3 * * *"    # 12:00 KST
-    - cron: "0 9 * * *"    # 18:00 KST
-    - cron: "0 12 * * *"   # 21:00 KST
+    - cron: "30 21 * * *"  # 06:30 KST
   workflow_dispatch:        # 수동 실행 버튼
 
 env:
